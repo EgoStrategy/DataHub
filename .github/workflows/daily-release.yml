@@ -1,0 +1,68 @@
+name: Daily Release
+
+on:
+  schedule:
+    # 每天中国时间16:00 (UTC+8) 运行，对应UTC时间08:00
+    - cron: '0 8 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+env:
+  RUST_LOG: debug
+
+jobs:
+  release:
+    name: Release and Publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # 获取完整历史以便正确处理版本号
+
+      - name: Set up Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+
+      - name: Scrape latest data
+        uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin egostrategy_datahub -- scrape --exchange all --date 2025-05-16
+
+      - name: Run release
+        uses: actions-rs/cargo@v1
+        with:
+          command: release
+
+      - name: Login to crates.io
+        uses: actions-rs/cargo@v1
+        with:
+          command: login
+          args: ${{ secrets.CRATES_IO_TOKEN }}
+
+      - name: Publish to crates.io
+        uses: actions-rs/cargo@v1
+        with:
+          command: publish
