@@ -194,17 +194,11 @@ impl StockDataProvider {
         
         // 发送HEAD请求获取远程文件信息
         let client = reqwest::blocking::Client::new();
-        let resp = match client.head(remote_url).send() {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("Failed to send HEAD request: {}", e);
-                return Ok(());  // 忽略错误，使用本地文件
-            }
-        };
+        let resp = client.head(remote_url).send()?;
         
         if !resp.status().is_success() {
             eprintln!("Remote file check failed: HTTP status {}", resp.status());
-            return Ok(());  // 忽略错误，使用本地文件
+            return Err(DataHubError::DataError(format!("Remote file check failed: HTTP status {}", resp.status())));
         }
         
         // 获取远程文件大小
