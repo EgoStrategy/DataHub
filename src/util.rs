@@ -1,5 +1,4 @@
 use chrono::NaiveDate;
-use log::info;
 use crate::models::stock::{StockData, DailyData};
 use crate::errors::{Result, DataHubError};
 
@@ -28,13 +27,13 @@ pub fn int_to_naive_date(date_int: i32) -> Result<NaiveDate> {
 // 限制K线记录数量
 pub fn limit_kline_records(daily_data: &mut Vec<DailyData>, max_records: usize, symbol: &str) {
     if daily_data.len() > max_records {
-        info!("Limiting {} K-line records to {} for stock {}", 
+        println!("Limiting {} K-line records to {} for stock {}", 
                  daily_data.len(), max_records, symbol);
         daily_data.truncate(max_records);
     }
 }
 
-// 导入StringArray
+// Arrow数据转换工具
 pub mod arrow_utils {
     use super::*;
     use arrow::datatypes::{DataType, Field, Schema, Fields};

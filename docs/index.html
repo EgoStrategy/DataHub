@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DataHub - 股票数据可视化</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 使用 ECharts 官方推荐的 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
+    <!-- 使用 Apache Arrow ES2015 版本 -->
+    <script src="https://cdn.jsdelivr.net/npm/apache-arrow@20.0.0/Arrow.es2015.min.js"></script>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 { color: #333; text-align: center; }
+        .container { 
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-top: 30px; 
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+            margin-bottom: 10px;
+        }
+        .info { 
+            background-color: white; 
+            padding: 15px; 
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #chart-container {
+            height: 500px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        select, input, button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .loading-content {
+            text-align: center;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .loading-spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #stock-info {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+        .stock-detail {
+            flex: 1;
+            min-width: 200px;
+            margin-bottom: 15px;
+        }
+        .progress-bar {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .progress {
+            height: 10px;
+            background-color: #4CAF50;
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p>加载数据中，请稍候...</p>
+            <div class="progress-bar">
+                <div id="progress" class="progress"></div>
+            </div>
+            <p id="loading-status">正在初始化...</p>
+        </div>
+    </div>
+
+    <h1>DataHub - 股票数据可视化</h1>
+    
+    <div class="container">
+        <div class="info">
+            <h2>数据信息</h2>
+            <p>股票数量: <span id="stock-count">加载中...</span></p>
+            <p>数据文件: <a href="./data/stock.arrow" download>下载 stock.arrow</a></p>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="exchange-select">交易所:</label>
+                <select id="exchange-select">
+                    <option value="all">全部</option>
+                    <option value="SSE">上交所</option>
+                    <option value="SZSE">深交所</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="symbol-input">股票代码:</label>
+                <input type="text" id="symbol-input" placeholder="输入股票代码">
+            </div>
+            
+            <div class="control-group">
+                <label for="symbol-select">选择股票:</label>
+                <select id="symbol-select">
+                    <option value="">加载中...</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <button id="search-btn">查询</button>
+            </div>
+        </div>
+        
+        <div class="info" id="stock-info" style="display: none;">
+            <div class="stock-detail">
+                <h3>股票信息</h3>
+                <p>代码: <span id="stock-symbol"></span></p>
+                <p>名称: <span id="stock-name"></span></p>
+                <p>交易所: <span id="stock-exchange"></span></p>
+            </div>
+            <div class="stock-detail">
+                <h3>最新行情</h3>
+                <p>日期: <span id="latest-date"></span></p>
+                <p>开盘: <span id="latest-open"></span></p>
+                <p>收盘: <span id="latest-close"></span></p>
+            </div>
+            <div class="stock-detail">
+                <h3>行情统计</h3>
+                <p>最高: <span id="latest-high"></span></p>
+                <p>最低: <span id="latest-low"></span></p>
+                <p>成交量: <span id="latest-volume"></span></p>
+            </div>
+        </div>
+        
+        <div id="chart-container"></div>
+    </div>
+
+    <script>
+        // 全局变量
+        let stockData = null;
+        let stockMap = new Map();
+        let chart = null;
+        let exchangeMap = new Map();
+        
+        // 更新加载进度
+        function updateLoadingProgress(percent, status) {
+            document.getElementById('progress').style.width = `${percent}%`;
+            if (status) {
+                document.getElementById('loading-status').textContent = status;
+            }
+        }
+        
+        // 初始化图表
+        function initChart() {
+            // 使用自适应主题
+            const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            
+            chart = echarts.init(document.getElementById('chart-container'), isDarkMode ? 'dark' : null);
+            
+            // 设置默认配置
+            const option = {
+                title: {
+                    text: '股票K线图',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'cross'
+                    }
+                },
+                legend: {
+                    data: ['K线', 'MA5', 'MA10', 'MA20', 'MA30'],
+                    bottom: 10
+                },
+                grid: {
+                    left: '3%',
+                    right: '3%',
+                    bottom: '15%'
+                },
+                xAxis: {
+                    type: 'category',
+                    data: [],
+                    scale: true,
+                    boundaryGap: false,
+                    axisLine: { onZero: false },
+                    splitLine: { show: false },
+                    splitNumber: 20
+                },
+                yAxis: {
+                    scale: true,
+                    splitArea: {
+                        show: true
+                    }
+                },
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        start: 50,
+                        end: 100
+                    },
+                    {
+                        show: true,
+                        type: 'slider',
+                        top: '90%',
+                        start: 50,
+                        end: 100
+                    }
+                ],
+                series: [
+                    {
+                        name: 'K线',
+                        type: 'candlestick',
+                        data: [],
+                        itemStyle: {
+                            color: '#ec0000',
+                            color0: '#00da3c',
+                            borderColor: '#8A0000',
+                            borderColor0: '#008F28'
+                        }
+                    },
+                    {
+                        name: 'MA5',
+                        type: 'line',
+                        data: [],
+                        smooth: true,
+                        lineStyle: {
+                            opacity: 0.5
+                        }
+                    },
+                    {
+                        name: 'MA10',
+                        type: 'line',
+                        data: [],
+                        smooth: true,
+                        lineStyle: {
+                            opacity: 0.5
+                        }
+                    },
+                    {
+                        name: 'MA20',
+                        type: 'line',
+                        data: [],
+                        smooth: true,
+                        lineStyle: {
+                            opacity: 0.5
+                        }
+                    },
+                    {
+                        name: 'MA30',
+                        type: 'line',
+                        data: [],
+                        smooth: true,
+                        lineStyle: {
+                            opacity: 0.5
+                        }
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            
+            // 响应窗口大小变化
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+            
+            // 响应暗黑模式变化
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                chart.dispose();
+                chart = echarts.init(document.getElementById('chart-container'), e.matches ? 'dark' : null);
+                chart.setOption(option);
+            });
+        }
+        
+        // 加载数据
+        async function loadData() {
+            try {
+                console.time('Loading data');
+                // 显示加载指示器
+                document.getElementById('loading').style.display = 'flex';
+                updateLoadingProgress(10, '正在初始化...');
+                
+                // 加载数据文件
+                updateLoadingProgress(30, '正在下载数据文件...');
+                const response = await fetch('./data/stock.arrow');
+                
+                updateLoadingProgress(60, '正在解析数据...');
+                const arrayBuffer = await response.arrayBuffer();
+                
+                // 解析二进制数据
+                stockData = parseArrowData(new Uint8Array(arrayBuffer));
+                
+                console.timeEnd('Loading data');
+                console.log('Data loaded successfully');
+                
+                // 处理数据
+                updateLoadingProgress(80, '正在处理数据...');
+                processStockData();
+                
+                // 更新股票数量
+                document.getElementById('stock-count').textContent = stockMap.size;
+                
+                // 初始化UI
+                updateLoadingProgress(90, '正在初始化界面...');
+                initUI();
+                
+                // 隐藏加载指示器
+                updateLoadingProgress(100, '加载完成');
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 500);
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('stock-count').textContent = '加载失败';
+                document.getElementById('loading-status').textContent = `加载失败: ${error.message}`;
+                updateLoadingProgress(100);
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                    alert('加载数据失败: ' + error.message);
+                }, 1000);
+            }
+        }
+        
+        // 解析Arrow数据
+        function parseArrowData(buffer) {
+            try {
+                console.log("Parsing Arrow data with global Arrow object...");
+                
+                // 检查全局Arrow对象是否可用
+                if (typeof Arrow === 'undefined' || typeof Arrow.tableFromIPC !== 'function') {
+                    throw new Error("Arrow library not available or tableFromIPC function not found");
+                }
+                
+                // 使用Arrow库解析数据
+                const table = Arrow.tableFromIPC(buffer);
+                console.log("Arrow table parsed successfully:", table);
+                
+                // 将Arrow表转换为JavaScript对象数组
+                const stocks = table.toArray().map(row => {
+                    return {
+                        exchange: row.exchange,
+                        symbol: row.symbol,
+                        name: row.name,
+                        daily: Array.from(row.daily).map(d => ({
+                            date: d.date,
+                            open: d.open,
+                            high: d.high,
+                            low: d.low,
+                            close: d.close,
+                            volume: d.volume,
+                            amount: d.amount
+                        }))
+                    };
+                });
+                
+                console.log("Converted to JS objects:", stocks);
+                return stocks;
+                
+            } catch (e) {
+                console.error('Failed to parse Arrow data:', e);
+                console.error('Error details:', e.stack);
+                
+                // Fall back to the original parsing method
+                return fallbackJsonParse(buffer);
+            }
+        }
+        
+        // Original parsing method as fallback
+        function fallbackJsonParse(buffer) {
+            console.warn("Falling back to JSON parsing method");
+            const textDecoder = new TextDecoder('utf-8');
+            let text = '';
+            
+            try {
+                // 查找JSON开始的位置
+                let startPos = -1;
+                for (let i = 0; i < buffer.length - 1; i++) {
+                    if (buffer[i] === 123) { // '{'
+                        startPos = i;
+                        break;
+                    }
+                }
+                
+                if (startPos >= 0) {
+                    // 提取可能的JSON部分
+                    const jsonPart = buffer.slice(startPos);
+                    text = textDecoder.decode(jsonPart);
+                    
+                    // 尝试解析JSON
+                    return JSON.parse(text);
+                }
+            } catch (e) {
+                console.error('Failed to parse Arrow data as JSON:', e);
+            }
+            
+            // 如果无法解析，返回一个空数组
+            return [];
+        }
+        
+        // 处理股票数据
+        function processStockData() {
+            console.time('Processing data');
+            
+            // 如果stockData是数组，直接处理
+            if (Array.isArray(stockData)) {
+                // 按交易所分组
+                exchangeMap = new Map();
+                
+                stockData.forEach(stock => {
+                    // 添加到股票映射
+                    stockMap.set(stock.symbol, stock);
+                    
+                    // 按交易所分组
+                    if (!exchangeMap.has(stock.exchange)) {
+                        exchangeMap.set(stock.exchange, []);
+                    }
+                    exchangeMap.get(stock.exchange).push(stock);
+                });
+            } else {
+                // 如果不是数组，尝试其他方式处理
+                console.warn('Stock data is not an array, trying alternative parsing');
+                
+                // 尝试从对象中提取数据
+                if (stockData && typeof stockData === 'object') {
+                    const stocks = [];
+                    
+                    // 尝试从对象中提取股票数据
+                    for (const key in stockData) {
+                        if (stockData.hasOwnProperty(key) && typeof stockData[key] === 'object') {
+                            const stock = stockData[key];
+                            if (stock.symbol && stock.exchange && stock.name) {
+                                stocks.push(stock);
+                            }
+                        }
+                    }
+                    
+                    // 处理提取的股票数据
+                    stocks.forEach(stock => {
+                        stockMap.set(stock.symbol, stock);
+                        
+                        if (!exchangeMap.has(stock.exchange)) {
+                            exchangeMap.set(stock.exchange, []);
+                        }
+                        exchangeMap.get(stock.exchange).push(stock);
+                    });
+                }
+            }
+            
+            console.timeEnd('Processing data');
+            console.log(`Processed ${stockMap.size} stocks`);
+        }
+        
+        // 初始化UI
+        function initUI() {
+            const exchangeSelect = document.getElementById('exchange-select');
+            const symbolSelect = document.getElementById('symbol-select');
+            const symbolInput = document.getElementById('symbol-input');
+            const searchBtn = document.getElementById('search-btn');
+            
+            // 交易所选择变化时更新股票列表
+            exchangeSelect.addEventListener('change', updateSymbolSelect);
+            
+            // 搜索按钮点击事件
+            searchBtn.addEventListener('click', () => {
+                const symbol = symbolInput.value || symbolSelect.value;
+                if (symbol) {
+                    displayStockData(symbol);
+                } else {
+                    alert('请输入或选择股票代码');
+                }
+            });
+            
+            // 股票选择变化时自动显示
+            symbolSelect.addEventListener('change', () => {
+                const symbol = symbolSelect.value;
+                if (symbol) {
+                    symbolInput.value = symbol;
+                    displayStockData(symbol);
+                }
+            });
+            
+            // 支持回车键搜索
+            symbolInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    searchBtn.click();
+                }
+            });
+            
+            // 初始更新股票列表
+            updateSymbolSelect();
+        }
+        
+        // 更新股票选择列表
+        function updateSymbolSelect() {
+            const exchangeSelect = document.getElementById('exchange-select');
+            const symbolSelect = document.getElementById('symbol-select');
+            
+            // 清空现有选项
+            symbolSelect.innerHTML = '<option value="">请选择股票</option>';
+            
+            const selectedExchange = exchangeSelect.value;
+            
+            let stocksToShow = [];
+            
+            if (selectedExchange === 'all') {
+                // 显示所有股票
+                for (const stocks of exchangeMap.values()) {
+                    stocksToShow = stocksToShow.concat(stocks);
+                }
+            } else {
+                // 显示选定交易所的股票
+                stocksToShow = exchangeMap.get(selectedExchange) || [];
+            }
+            
+            // 按股票代码排序
+            stocksToShow.sort((a, b) => a.symbol.localeCompare(b.symbol));
+            
+            // 添加选项
+            stocksToShow.forEach(stock => {
+                const option = document.createElement('option');
+                option.value = stock.symbol;
+                option.textContent = `${stock.symbol} - ${stock.name}`;
+                symbolSelect.appendChild(option);
+            });
+            
+            console.log(`Updated symbol select with ${stocksToShow.length} stocks`);
+        }
+        
+        // 显示股票数据
+        function displayStockData(symbol) {
+            const stock = stockMap.get(symbol);
+            
+            if (!stock) {
+                alert(`未找到股票: ${symbol}`);
+                return;
+            }
+            
+            // 显示股票信息
+            document.getElementById('stock-info').style.display = 'flex';
+            document.getElementById('stock-symbol').textContent = stock.symbol;
+            document.getElementById('stock-name').textContent = stock.name;
+            document.getElementById('stock-exchange').textContent = stock.exchange;
+            
+            // 处理日线数据
+            const dailyData = stock.daily;
+            
+            if (!dailyData || dailyData.length === 0) {
+                alert(`股票 ${symbol} 没有日线数据`);
+                return;
+            }
+            
+            // 按日期升序排序
+            dailyData.sort((a, b) => a.date - b.date);
+            
+            // 显示最新数据
+            const latest = dailyData[dailyData.length - 1];
+            document.getElementById('latest-date').textContent = formatDate(latest.date);
+            document.getElementById('latest-open').textContent = latest.open.toFixed(2);
+            document.getElementById('latest-close').textContent = latest.close.toFixed(2);
+            document.getElementById('latest-high').textContent = latest.high.toFixed(2);
+            document.getElementById('latest-low').textContent = latest.low.toFixed(2);
+            document.getElementById('latest-volume').textContent = formatNumber(latest.volume);
+            
+            // 准备K线数据
+            const dates = dailyData.map(item => formatDate(item.date));
+            const kData = dailyData.map(item => [item.open, item.close, item.low, item.high]);
+            
+            // 计算移动平均线
+            const closePrices = dailyData.map(item => item.close);
+            const ma5 = calculateMA(5, closePrices);
+            const ma10 = calculateMA(10, closePrices);
+            const ma20 = calculateMA(20, closePrices);
+            const ma30 = calculateMA(30, closePrices);
+            
+            // 更新图表
+            chart.setOption({
+                title: {
+                    text: `${stock.name} (${stock.symbol}) K线图`
+                },
+                xAxis: {
+                    data: dates
+                },
+                series: [
+                    {
+                        name: 'K线',
+                        data: kData
+                    },
+                    {
+                        name: 'MA5',
+                        data: ma5
+                    },
+                    {
+                        name: 'MA10',
+                        data: ma10
+                    },
+                    {
+                        name: 'MA20',
+                        data: ma20
+                    },
+                    {
+                        name: 'MA30',
+                        data: ma30
+                    }
+                ]
+            });
+        }
+        
+        // 计算移动平均线
+        function calculateMA(dayCount, data) {
+            const result = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < dayCount - 1) {
+                    result.push('-');
+                    continue;
+                }
+                let sum = 0;
+                for (let j = 0; j < dayCount; j++) {
+                    sum += data[i - j];
+                }
+                result.push((sum / dayCount).toFixed(2));
+            }
+            return result;
+        }
+        
+        // 格式化日期
+        function formatDate(dateInt) {
+            const dateStr = dateInt.toString();
+            return `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
+        }
+        
+        // 格式化数字
+        function formatNumber(num) {
+            return num.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,');
+        }
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            initChart();
+            loadData().catch(err => {
+                console.error("Failed to load data:", err);
+            });
+        });
+    </script>
+</body>
+</html>

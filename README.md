@@ -65,7 +65,7 @@ use egostrategy_datahub::StockDataProvider;
 use egostrategy_datahub::Result;
 
 fn main() -> Result<()> {
-    // 创建数据提供者
+    // 创建数据提供者（会自动检查并下载最新数据）
     let provider = StockDataProvider::new()?;
     
     // 获取特定股票数据
@@ -85,6 +85,10 @@ fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+### 在线数据可视化
+
+您可以访问 [https://egostrategy.github.io/DataHub/](https://egostrategy.github.io/DataHub/) 查看股票数据的可视化展示。
 
 ## 开发
 
