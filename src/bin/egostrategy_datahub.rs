@@ -4,6 +4,7 @@ use egostrategy_datahub::scrapers::sse::SSEScraper;
 use egostrategy_datahub::scrapers::szse::SZSEScraper;
 use egostrategy_datahub::services::data_service::DataService;
 use egostrategy_datahub::util::arrow_utils;
+use egostrategy_datahub::config::Config;
 
 use clap::{App, Arg, SubCommand};
 use chrono::NaiveDate;
@@ -178,7 +179,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         };
         
         // 创建配置
-        let config = egostrategy_datahub::config::Config::new()
+        let config = Config::new()
             .with_debug_mode(debug_mode)
             .with_debug_stock_limit(debug_stock_limit)
             .with_data_dir(output_dir)

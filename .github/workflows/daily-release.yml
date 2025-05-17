@@ -49,7 +49,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: run
-          args: --bin egostrategy_datahub -- scrape --exchange all --date 2025-05-16
+          args: --bin egostrategy_datahub -- scrape --exchange all --max-records 200
 
       - name: Run release
         uses: actions-rs/cargo@v1

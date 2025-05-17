@@ -1,3 +1,5 @@
 [alias]
 extract-date = "run --bin extract_latest_date"
 release = "run --bin release"
+scrape = "--bin egostrategy_datahub -- scrape"
+explore = "run --bin egostrategy_datahub -- explore"
