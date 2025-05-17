@@ -18,8 +18,8 @@ impl StockDataProvider {
     /// 创建新的数据提供者实例
     pub fn new() -> Result<Self> {
         // 使用包内docs/data/stock.arrow路径文件
-        let data_dir = "docs/data";
-        let package_arrow_file = "docs/data/stock.arrow";
+        let data_dir = concat!(env!("CARGO_MANIFEST_DIR"));
+        let package_arrow_file = concat!(env!("CARGO_MANIFEST_DIR"), "/docs/data/stock.arrow");
         
         // 确保数据目录存在
         if !std::path::Path::new(data_dir).exists() {
@@ -45,8 +45,10 @@ impl StockDataProvider {
         }
         
         // 同步检查更新
-        if let Err(e) = Self::check_for_updates_sync(package_arrow_file) {
-            eprintln!("Failed to check for updates: {}", e);
+        if let Err(_) = Self::check_for_updates_sync(package_arrow_file, "https://egostrategy.github.io/DataHub/data/stock.arrow") {
+            if let Err(e) = Self::check_for_updates_sync(package_arrow_file, "https://bgithub.xyz/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow") {
+                eprintln!("Failed to check for updates: {}", e);
+            }
         }
         
         // 从文件加载数据（更新后）
@@ -171,8 +173,8 @@ impl StockDataProvider {
     }
     
     // 同步检查远程文件是否有更新
-    fn check_for_updates_sync(arrow_file: &str) -> Result<()> {
-        let remote_url = "https://egostrategy.github.io/DataHub/data/stock.arrow";
+    fn check_for_updates_sync(arrow_file: &str, from_url: &str) -> Result<()> {
+        let remote_url = from_url;
         
         // 获取本地文件信息
         let local_metadata = match fs::metadata(arrow_file) {
