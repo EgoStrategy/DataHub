@@ -18,7 +18,7 @@ impl StockDataProvider {
     /// 创建新的数据提供者实例
     pub fn new() -> Result<Self> {
         // 使用包内docs/data/stock.arrow路径文件
-        let data_dir = concat!(env!("CARGO_MANIFEST_DIR"));
+        let data_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/docs/data");
         let package_arrow_file = concat!(env!("CARGO_MANIFEST_DIR"), "/docs/data/stock.arrow");
         
         // 确保数据目录存在
