@@ -51,18 +51,24 @@ jobs:
           command: run
           args: --bin egostrategy_datahub -- scrape --exchange all --max-records 200
 
-      - name: Run release
-        uses: actions-rs/cargo@v1
-        with:
-          command: release
-
-      - name: Login to crates.io
-        uses: actions-rs/cargo@v1
-        with:
-          command: login
-          args: ${{ secrets.CRATES_IO_TOKEN }}
-
-      - name: Publish to crates.io
-        uses: actions-rs/cargo@v1
-        with:
-          command: publish
+      # Git Add
+      - name: Git Add
+        run: git add .
+      
+      # Git Commit
+      - name: Git Commit
+        # 如果没有变更，则跳过提交步骤
+        run: |
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "自动提交: 更新stock.arrow"
+          fi
+      
+      # Git Push
+      - name: Git Push
+        # 使用GitHub提供的token进行身份验证
+        run: git push
+        env:
+          # 使用GitHub提供的token
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -72,15 +72,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .takes_value(true),
             )
             .arg(
-                Arg::with_name("output")
-                    .short('o')
-                    .long("output")
-                    .value_name("OUTPUT")
-                    .help("Output directory")
-                    .default_value("data")
-                    .takes_value(true),
-            )
-            .arg(
                 Arg::with_name("max-records")
                     .long("max-records")
                     .value_name("MAX_RECORDS")
@@ -123,15 +114,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .takes_value(true)
                     .default_value("10"),
             )
-            .arg(
-                Arg::with_name("data-dir")
-                    .short('d')
-                    .long("data-dir")
-                    .value_name("DATA_DIR")
-                    .help("Data directory")
-                    .default_value("data")
-                    .takes_value(true),
-            ),
     );
 
     let matches = app.get_matches();
@@ -154,7 +136,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let exchange = matches.value_of("exchange").unwrap();
         let date_str = matches.value_of("date").unwrap();
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
-        let output_dir = matches.value_of("output").unwrap();
         let symbol = matches.value_of("symbol");
         let force_full = matches.is_present("force-full");
         
@@ -163,9 +144,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .unwrap_or("200")
             .parse::<usize>()
             .unwrap_or(200);
-        
-        // Create output directory if it doesn't exist
-        std::fs::create_dir_all(output_dir)?;
         
         // Create scrapers
         let scrapers: Vec<Arc<dyn StockScraper + Send + Sync>> = match exchange.to_lowercase().as_str() {
@@ -182,7 +160,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let config = Config::new()
             .with_debug_mode(debug_mode)
             .with_debug_stock_limit(debug_stock_limit)
-            .with_data_dir(output_dir)
             .with_max_kline_records(max_kline_records)
             .with_force_full_history(force_full);
         
@@ -202,7 +179,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             data_service.process_daily_stocks(&date).await?;
         }
     } else if let Some(matches) = matches.subcommand_matches("explore") {
-        let data_dir = matches.value_of("data-dir").unwrap();
         let symbol_filter = matches.value_of("symbol");
         let exchange_filter = matches.value_of("exchange");
         let limit = matches.value_of("limit")
@@ -211,8 +187,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .unwrap_or(10);
         
         // 读取数据
-        let data_path = format!("{}/stock.arrow", data_dir);
-        let stocks = arrow_utils::read_stock_data_from_arrow(&data_path)?;
+        let stocks = arrow_utils::read_stock_data_from_arrow("docs/data/stock.arrow")?;
         
         println!("Found {} stocks in database", stocks.len());
         

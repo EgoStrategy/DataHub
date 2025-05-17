@@ -1,6 +1,6 @@
 [package]
 name = "egostrategy_datahub"
-version = "2025.5.16"
+version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 description = "股票市场数据处理系统，支持多交易所数据抓取和分析"
@@ -34,17 +34,5 @@ arrow = "55.1.0"
 arrow-array = "55.1.0"
 
 [[bin]]
-name = "extract_latest_date"
-path = "scripts/extract_latest_date.rs"
-
-[[bin]]
-name = "release"
-path = "scripts/release.rs"
-
-[[bin]]
 name = "create_empty_arrow"
 path = "scripts/create_empty_arrow.rs"
-
-[[example]]
-name = "use_data_provider"
-path = "examples/use_data_provider.rs"

@@ -6,7 +6,6 @@ use crate::data_provider::StockDataProvider;
 use crate::util;
 use chrono::NaiveDate;
 use log::{info, warn};
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::collections::HashMap;
 
@@ -14,34 +13,20 @@ use std::collections::HashMap;
 pub struct DataService {
     config: Config,
     scrapers: Vec<Arc<dyn StockScraper + Send + Sync>>,
-    data_path: PathBuf,
 }
 
 impl DataService {
     /// 创建新的数据服务实例
     pub fn new(config: Config, scrapers: Vec<Arc<dyn StockScraper + Send + Sync>>) -> Self {
-        let data_path = PathBuf::from(&config.data_dir).join("stock.arrow");
         Self {
             config,
             scrapers,
-            data_path,
         }
-    }
-    
-    /// 获取数据文件路径
-    pub fn data_path(&self) -> &Path {
-        &self.data_path
     }
     
     /// 加载数据提供者
     pub async fn load_provider(&self) -> Result<StockDataProvider> {
-        if self.data_path.exists() {
-            info!("Loading existing data from {}", self.data_path.display());
-            StockDataProvider::load_from_file(self.data_path.to_str().unwrap())
-        } else {
-            info!("No existing data found, creating new dataset");
-            Ok(StockDataProvider::new()?)
-        }
+        StockDataProvider::load_from_file("docs/data/stock.arrow")
     }
     
     /// 处理单个股票
@@ -290,17 +275,10 @@ impl DataService {
     pub async fn save_data(&self, data: &[StockData]) -> Result<()> {
         // 保存到主数据文件
         let provider = StockDataProvider::new_with_data(data.to_vec())?;
-        provider.save_to_file(self.data_path.to_str().unwrap())?;
-        
-        // 同时保存到 docs/data 目录
-        let docs_dir = "docs/data";
-        let docs_path = format!("{}/stock.arrow", docs_dir);
-        
-        // 确保目录存在
-        std::fs::create_dir_all(docs_dir)?;
+        provider.save_to_file("docs/data/stock.arrow")?;
         
         // 保存数据
-        util::arrow_utils::save_stock_data_to_arrow(data, &docs_path)?;
+        util::arrow_utils::save_stock_data_to_arrow(data, "docs/data/stock.arrow")?;
         
         Ok(())
     }
