@@ -2,7 +2,6 @@
 name = "egostrategy_datahub"
 version = "0.1.0"
 edition = "2021"
-build = "build.rs"
 description = "股票市场数据处理系统，支持多交易所数据抓取和分析"
 license = "MIT"
 repository = "https://github.com/EgoStrategy/DataHub"
@@ -36,3 +35,7 @@ arrow-array = "55.1.0"
 [[bin]]
 name = "create_empty_arrow"
 path = "scripts/create_empty_arrow.rs"
+
+exclude = [
+    "docs/"
+]
