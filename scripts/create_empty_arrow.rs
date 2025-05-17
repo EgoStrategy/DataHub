@@ -54,10 +54,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     
     // 确保目录存在
-    std::fs::create_dir_all("data")?;
+    std::fs::create_dir_all("docs/data")?;
     
     // 创建文件并写入
-    let file = File::create("data/stock.arrow")?;
+    let file = File::create("docs/data/stock.arrow")?;
     let mut writer = FileWriter::try_new(file, &schema)?;
     writer.write(&batch)?;
     writer.finish()?;

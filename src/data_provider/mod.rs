@@ -17,21 +17,46 @@ pub struct StockDataProvider {
 impl StockDataProvider {
     /// 创建新的数据提供者实例
     pub fn new() -> Result<Self> {
-        // 检查本地文件是否存在，如果不存在则创建空文件
-        let data_dir = "data";
-        let arrow_file = format!("{}/stock.arrow", data_dir);
+        // 使用包内docs/data/stock.arrow路径文件
+        let data_dir = "docs/data";
+        let package_arrow_file = "docs/data/stock.arrow";
         
-        if !std::path::Path::new(&arrow_file).exists() {
-            println!("Local stock.arrow file not found. Creating empty file.");
+        // 确保数据目录存在
+        if !std::path::Path::new(data_dir).exists() {
             std::fs::create_dir_all(data_dir)?;
+        }
+        
+        // 检查本地文件是否存在，如果不存在则创建空文件
+        if !std::path::Path::new(&package_arrow_file).exists() {
+            println!("Local stock.arrow file not found. Creating empty file.");
             
             // 创建空的Arrow文件
             let empty_data: Vec<StockData> = Vec::new();
-            arrow_utils::save_stock_data_to_arrow(&empty_data, &arrow_file)?;
+            arrow_utils::save_stock_data_to_arrow(&empty_data, &package_arrow_file)?;
         }
         
-        // 从文件加载数据
-        let data = arrow_utils::read_stock_data_from_arrow(&arrow_file)?;
+        // 从文件加载数据（更新前）
+        let data_before_update = arrow_utils::read_stock_data_from_arrow(&package_arrow_file)?;
+        let latest_date_before = Self::get_latest_date_from_data(&data_before_update);
+        if let Some(date) = latest_date_before {
+            println!("更新前最新交易日期: {}", date);
+        } else {
+            println!("更新前无交易数据");
+        }
+        
+        // 同步检查更新
+        if let Err(e) = Self::check_for_updates_sync(package_arrow_file) {
+            eprintln!("Failed to check for updates: {}", e);
+        }
+        
+        // 从文件加载数据（更新后）
+        let data = arrow_utils::read_stock_data_from_arrow(&package_arrow_file)?;
+        let latest_date_after = Self::get_latest_date_from_data(&data);
+        if let Some(date) = latest_date_after {
+            println!("更新后最新交易日期: {}", date);
+        } else {
+            println!("更新后无交易数据");
+        }
         
         // 创建索引
         let mut provider = Self { 
@@ -41,14 +66,6 @@ impl StockDataProvider {
         };
         
         provider.rebuild_indices();
-        
-        // 异步检查更新（不阻塞初始化）
-        let arrow_file_clone = arrow_file.clone();
-        tokio::spawn(async move {
-            if let Err(e) = Self::check_for_updates(&arrow_file_clone).await {
-                eprintln!("Failed to check for updates: {}", e);
-            }
-        });
         
         Ok(provider)
     }
@@ -131,9 +148,14 @@ impl StockDataProvider {
     
     /// 获取最新日期
     pub fn get_latest_trading_date(&self) -> Option<i32> {
+        Self::get_latest_date_from_data(&self.data)
+    }
+    
+    /// 从数据中获取最新日期（辅助函数）
+    fn get_latest_date_from_data(data: &[StockData]) -> Option<i32> {
         let mut latest_date = None;
         
-        for stock in &self.data {
+        for stock in data {
             if let Some(daily) = stock.daily.first() {
                 if let Some(current_latest) = latest_date {
                     if daily.date > current_latest {
@@ -148,16 +170,16 @@ impl StockDataProvider {
         latest_date
     }
     
-    // 检查远程文件是否有更新
-    async fn check_for_updates(local_path: &str) -> Result<()> {
+    // 同步检查远程文件是否有更新
+    fn check_for_updates_sync(arrow_file: &str) -> Result<()> {
         let remote_url = "https://egostrategy.github.io/DataHub/data/stock.arrow";
         
         // 获取本地文件信息
-        let local_metadata = match fs::metadata(local_path) {
+        let local_metadata = match fs::metadata(arrow_file) {
             Ok(meta) => meta,
             Err(_) => {
                 // 本地文件不存在，直接下载
-                return Self::download_file(remote_url, local_path).await;
+                return Self::download_file_sync(remote_url, arrow_file);
             }
         };
         
@@ -169,8 +191,8 @@ impl StockDataProvider {
             .as_secs();
         
         // 发送HEAD请求获取远程文件信息
-        let client = reqwest::Client::new();
-        let resp = match client.head(remote_url).send().await {
+        let client = reqwest::blocking::Client::new();
+        let resp = match client.head(remote_url).send() {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("Failed to send HEAD request: {}", e);
@@ -195,7 +217,7 @@ impl StockDataProvider {
         // 如果远程文件大小不同且不为0，下载新文件
         if remote_size != local_size && remote_size > 0 {
             println!("Remote stock.arrow file size differs. Downloading updates...");
-            return Self::download_file(remote_url, local_path).await;
+            return Self::download_file_sync(remote_url, arrow_file);
         }
         
         // 获取远程文件修改时间
@@ -210,7 +232,7 @@ impl StockDataProvider {
                     // 比较修改时间
                     if remote_time > local_modified {
                         println!("Remote stock.arrow file is newer. Downloading updates...");
-                        return Self::download_file(remote_url, local_path).await;
+                        return Self::download_file_sync(remote_url, arrow_file);
                     }
                 }
             }
@@ -219,26 +241,22 @@ impl StockDataProvider {
         Ok(())
     }
     
-    // 下载文件
-    async fn download_file(url: &str, path: &str) -> Result<()> {
+    // 同步下载文件
+    fn download_file_sync(url: &str, arrow_file: &str) -> Result<()> {
         println!("Downloading stock data from: {}", url);
         
         // 下载文件
-        let resp = reqwest::get(url).await?;
+        let client = reqwest::blocking::Client::new();
+        let resp = client.get(url).send()?;
         if !resp.status().is_success() {
             return Err(DataHubError::DataError(format!(
                 "Failed to download data file: HTTP status {}", resp.status()
             )));
         }
         
-        let bytes = resp.bytes().await?;
+        let bytes = resp.bytes()?;
         
-        // 先写入临时文件
-        let temp_path = format!("{}.tmp", path);
-        std::fs::write(&temp_path, &bytes)?;
-        
-        // 然后重命名，确保原子操作
-        std::fs::rename(&temp_path, path)?;
+        std::fs::write(&arrow_file, &bytes)?;
         
         println!("Successfully downloaded stock data file");
         Ok(())
