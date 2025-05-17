@@ -1,6 +1,6 @@
 [package]
 name = "egostrategy_datahub"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "股票市场数据处理系统，支持多交易所数据抓取和分析"
 license = "MIT"
