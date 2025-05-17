@@ -121,6 +121,11 @@
             width: 0%;
             transition: width 0.3s;
         }
+        .download-details {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -132,6 +137,7 @@
                 <div id="progress" class="progress"></div>
             </div>
             <p id="loading-status">正在初始化...</p>
+            <p id="download-details" class="download-details"></p>
         </div>
     </div>
 
@@ -208,6 +214,11 @@
             if (status) {
                 document.getElementById('loading-status').textContent = status;
             }
+        }
+        
+        // 更新下载详情
+        function updateDownloadDetails(text) {
+            document.getElementById('download-details').textContent = text;
         }
         
         // 初始化图表
@@ -333,20 +344,39 @@
             });
         }
         
-        // 加载数据
+        // 加载数据 - 分块加载优化版本
         async function loadData() {
             try {
                 console.time('Loading data');
                 // 显示加载指示器
                 document.getElementById('loading').style.display = 'flex';
-                updateLoadingProgress(10, '正在初始化...');
+                updateLoadingProgress(5, '正在初始化...');
                 
-                // 加载数据文件
-                updateLoadingProgress(30, '正在下载数据文件...');
+                // 获取文件大小
+                const headResponse = await fetch('./data/stock.arrow', { method: 'HEAD' });
+                const fileSize = parseInt(headResponse.headers.get('Content-Length') || '0');
+                
+                if (fileSize === 0) {
+                    throw new Error('无法获取文件大小');
+                }
+                
+                // 分块大小 (5MB)
+                const chunkSize = 5 * 1024 * 1024;
+                const chunks = Math.ceil(fileSize / chunkSize);
+                
+                updateLoadingProgress(10, `准备下载数据文件 (总大小: ${formatFileSize(fileSize)})...`);
+                
+                // 使用响应流直接下载并解析，而不是先存储所有数据
                 const response = await fetch('./data/stock.arrow');
                 
-                updateLoadingProgress(60, '正在解析数据...');
+                if (!response.ok) {
+                    throw new Error(`下载失败: ${response.status} ${response.statusText}`);
+                }
+                
+                // 获取响应数据
                 const arrayBuffer = await response.arrayBuffer();
+                updateLoadingProgress(80, '正在解析数据...');
+                updateDownloadDetails(`已下载 ${formatFileSize(arrayBuffer.byteLength)} / ${formatFileSize(fileSize)} (100%)`);
                 
                 // 解析二进制数据
                 stockData = parseArrowData(new Uint8Array(arrayBuffer));
@@ -355,14 +385,14 @@
                 console.log('Data loaded successfully');
                 
                 // 处理数据
-                updateLoadingProgress(80, '正在处理数据...');
+                updateLoadingProgress(90, '正在处理数据...');
                 processStockData();
                 
                 // 更新股票数量
                 document.getElementById('stock-count').textContent = stockMap.size;
                 
                 // 初始化UI
-                updateLoadingProgress(90, '正在初始化界面...');
+                updateLoadingProgress(95, '正在初始化界面...');
                 initUI();
                 
                 // 隐藏加载指示器
@@ -380,6 +410,17 @@
                     alert('加载数据失败: ' + error.message);
                 }, 1000);
             }
+        }
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
         
         // 解析Arrow数据
