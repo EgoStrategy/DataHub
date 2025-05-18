@@ -344,7 +344,7 @@
             });
         }
         
-        // 加载数据 - 分块加载优化版本
+        // 加载数据 - 真正的分块加载优化版本
         async function loadData() {
             try {
                 console.time('Loading data');
@@ -360,26 +360,92 @@
                     throw new Error('无法获取文件大小');
                 }
                 
-                // 分块大小 (5MB)
-                const chunkSize = 5 * 1024 * 1024;
+                // 分块大小 (2MB)
+                const chunkSize = 2 * 1024 * 1024;
                 const chunks = Math.ceil(fileSize / chunkSize);
                 
                 updateLoadingProgress(10, `准备下载数据文件 (总大小: ${formatFileSize(fileSize)})...`);
                 
-                // 使用响应流直接下载并解析，而不是先存储所有数据
-                const response = await fetch('./data/stock.arrow');
+                // 使用流式处理和增量解析
+                let downloadedSize = 0;
+                let arrowData = null;
                 
-                if (!response.ok) {
-                    throw new Error(`下载失败: ${response.status} ${response.statusText}`);
+                // 创建一个临时存储，用于存储已下载的块
+                const tempChunks = [];
+                
+                // 逐块下载
+                for (let i = 0; i < chunks; i++) {
+                    const start = i * chunkSize;
+                    const end = Math.min(fileSize - 1, start + chunkSize - 1);
+                    
+                    updateLoadingProgress(
+                        10 + Math.floor((i / chunks) * 70),
+                        `下载数据分片 ${i + 1}/${chunks}`
+                    );
+                    
+                    updateDownloadDetails(
+                        `已下载 ${formatFileSize(downloadedSize)} / ${formatFileSize(fileSize)} (${Math.floor((downloadedSize / fileSize) * 100)}%)`
+                    );
+                    
+                    try {
+                        const response = await fetch('./data/stock.arrow', {
+                            headers: {
+                                'Range': `bytes=${start}-${end}`
+                            }
+                        });
+                        
+                        if (!response.ok && response.status !== 206) {
+                            throw new Error(`下载分片 ${i + 1} 失败: ${response.status} ${response.statusText}`);
+                        }
+                        
+                        const buffer = await response.arrayBuffer();
+                        tempChunks.push(new Uint8Array(buffer));
+                        downloadedSize += buffer.byteLength;
+                        
+                        // 更新下载进度
+                        updateDownloadDetails(
+                            `已下载 ${formatFileSize(downloadedSize)} / ${formatFileSize(fileSize)} (${Math.floor((downloadedSize / fileSize) * 100)}%)`
+                        );
+                        
+                        // 给UI一点时间更新
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    } catch (error) {
+                        console.error(`下载分片 ${i + 1} 失败:`, error);
+                        throw new Error(`下载分片 ${i + 1} 失败: ${error.message}`);
+                    }
                 }
                 
-                // 获取响应数据
-                const arrayBuffer = await response.arrayBuffer();
-                updateLoadingProgress(80, '正在解析数据...');
-                updateDownloadDetails(`已下载 ${formatFileSize(arrayBuffer.byteLength)} / ${formatFileSize(fileSize)} (100%)`);
+                updateLoadingProgress(80, '正在合并数据...');
                 
-                // 解析二进制数据
-                stockData = parseArrowData(new Uint8Array(arrayBuffer));
+                // 计算总大小
+                const totalLength = tempChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+                
+                // 合并所有块
+                try {
+                    // 使用更高效的方法合并块
+                    let offset = 0;
+                    const mergedArray = new Uint8Array(totalLength);
+                    
+                    for (const chunk of tempChunks) {
+                        mergedArray.set(chunk, offset);
+                        offset += chunk.length;
+                    }
+                    
+                    // 清除临时存储，释放内存
+                    tempChunks.length = 0;
+                    
+                    updateLoadingProgress(85, '正在解析数据...');
+                    
+                    // 解析二进制数据
+                    stockData = parseArrowData(mergedArray);
+                    
+                    // 清除合并数组，释放内存
+                    // mergedArray = null;
+                    
+                } catch (error) {
+                    console.error('合并数据失败:', error);
+                    throw new Error(`合并数据失败: ${error.message}`);
+                }
                 
                 console.timeEnd('Loading data');
                 console.log('Data loaded successfully');
