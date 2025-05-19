@@ -72,3 +72,6 @@ jobs:
         env:
           # 使用GitHub提供的token
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+permissions:
+  contents: write
