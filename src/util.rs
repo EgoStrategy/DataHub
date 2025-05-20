@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use log::info;
 use crate::models::stock::{StockData, DailyData};
 use crate::errors::{Result, DataHubError};
 
@@ -27,7 +28,7 @@ pub fn int_to_naive_date(date_int: i32) -> Result<NaiveDate> {
 // 限制K线记录数量
 pub fn limit_kline_records(daily_data: &mut Vec<DailyData>, max_records: usize, symbol: &str) {
     if daily_data.len() > max_records {
-        println!("Limiting {} K-line records to {} for stock {}", 
+        info!("Limiting {} K-line records to {} for stock {}", 
                  daily_data.len(), max_records, symbol);
         daily_data.truncate(max_records);
     }
@@ -41,6 +42,7 @@ pub mod arrow_utils {
     use arrow_array::{Int32Array, Float32Array, Int64Array, StructArray, ListArray, StringArray};
     use arrow::record_batch::RecordBatch;
     use arrow::buffer::NullBuffer;
+    use log::info;
     use std::sync::Arc;
     use std::io::Cursor;
     use arrow::ipc::reader::FileReader;
@@ -234,9 +236,9 @@ pub mod arrow_utils {
     // 将股票数据保存到Arrow文件
     pub fn save_stock_data_to_arrow(data: &[StockData], path: &str) -> Result<()> {
         // 打印保存的数据信息
-        println!("Saving {} stocks to {}", data.len(), path);
+        info!("Saving {} stocks to {}", data.len(), path);
         for stock in data {
-            println!("  - {} ({}) - {}: {} daily records", 
+            info!("  - {} ({}) - {}: {} daily records", 
                      stock.name, stock.symbol, stock.exchange, stock.daily.len());
         }
         

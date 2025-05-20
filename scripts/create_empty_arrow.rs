@@ -2,6 +2,7 @@ use arrow::array::{ArrayRef, StringArray};
 use arrow::datatypes::{DataType, Field, Schema, Fields};
 use arrow::record_batch::RecordBatch;
 use arrow::ipc::writer::FileWriter;
+use log::info;
 use std::fs::File;
 use std::sync::Arc;
 
@@ -62,6 +63,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writer.write(&batch)?;
     writer.finish()?;
     
-    println!("成功创建空的 stock.arrow 文件");
+    info!("成功创建空的 stock.arrow 文件");
     Ok(())
 }

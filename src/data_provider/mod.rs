@@ -1,3 +1,5 @@
+use log::{error, info};
+
 use crate::models::stock::StockData;
 use crate::errors::{Result, DataHubError};
 use crate::util::arrow_utils;
@@ -28,7 +30,7 @@ impl StockDataProvider {
         
         // 检查本地文件是否存在，如果不存在则创建空文件
         if !std::path::Path::new(&package_arrow_file).exists() {
-            println!("Local stock.arrow file not found. Creating empty file.");
+            info!("Local stock.arrow file not found. Creating empty file.");
             
             // 创建空的Arrow文件
             let empty_data: Vec<StockData> = Vec::new();
@@ -39,43 +41,38 @@ impl StockDataProvider {
         let data_before_update = arrow_utils::read_stock_data_from_arrow(&package_arrow_file)?;
         let latest_date_before = Self::get_latest_date_from_data(&data_before_update);
         if let Some(date) = latest_date_before {
-            println!("更新前最新交易日期: {}", date);
+            info!("更新前最新交易日期: {}", date);
         } else {
-            println!("更新前无交易数据");
+            info!("更新前无交易数据");
         }
         
         // 同步检查更新
-        if let Err(_) = Self::check_for_updates_sync(package_arrow_file, "https://egostrategy.github.io/DataHub/data/stock.arrow") {
-            // 尝试多个国内镜像站点，按优先级排序
-            let mirror_sites = [
-                "https://bgithub.xyz/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow",
-                "https://kkgithub.com/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow",
-                "https://gitclone.com/github.com/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow",
-                "https://github.ur1.fun/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow",
-                "https://hub.fastgit.org/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow",
-                "https://github.com.cnpmjs.org/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow"
-            ];
-            
-            let mut success = false;
-            for mirror in mirror_sites {
-                if let Ok(_) = Self::check_for_updates_sync(package_arrow_file, mirror) {
-                    success = true;
-                    break;
-                }
+        // 尝试多个国内镜像站点，按优先级排序
+        let mirror_sites = [
+            "raw.githubusercontent.com",
+            "raw.bgithub.xyz",
+            "raw.staticdn.net"
+        ];
+        
+        let mut success = false;
+        for mirror in mirror_sites {
+            if let Ok(_) = Self::check_for_updates_sync(package_arrow_file, &format!("https://{}/EgoStrategy/DataHub/main/docs/data/stock.arrow", mirror)) {
+                success = true;
+                break;
             }
-            
-            if !success {
-                eprintln!("Failed to check for updates from all mirror sites");
-            }
+        }
+        
+        if !success {
+            error!("Failed to check for updates from all mirror sites");
         }
         
         // 从文件加载数据（更新后）
         let data = arrow_utils::read_stock_data_from_arrow(&package_arrow_file)?;
         let latest_date_after = Self::get_latest_date_from_data(&data);
         if let Some(date) = latest_date_after {
-            println!("更新后最新交易日期: {}", date);
+            info!("更新后最新交易日期: {}", date);
         } else {
-            println!("更新后无交易数据");
+            info!("更新后无交易数据");
         }
         
         // 创建索引
@@ -215,7 +212,7 @@ impl StockDataProvider {
         let resp = client.head(remote_url).send()?;
         
         if !resp.status().is_success() {
-            eprintln!("Remote file check failed: HTTP status {}", resp.status());
+            error!("Remote file check failed: HTTP status {}", resp.status());
             return Err(DataHubError::DataError(format!("Remote file check failed: HTTP status {}", resp.status())));
         }
         
@@ -230,7 +227,7 @@ impl StockDataProvider {
         
         // 如果远程文件大小不同且不为0，下载新文件
         if remote_size != local_size && remote_size > 0 {
-            println!("Remote stock.arrow file size differs. Downloading updates...");
+            info!("Remote stock.arrow file size differs. Downloading updates...");
             return Self::download_file_sync(remote_url, arrow_file);
         }
         
@@ -245,7 +242,7 @@ impl StockDataProvider {
                     
                     // 比较修改时间
                     if remote_time > local_modified {
-                        println!("Remote stock.arrow file is newer. Downloading updates...");
+                        info!("Remote stock.arrow file is newer. Downloading updates...");
                         return Self::download_file_sync(remote_url, arrow_file);
                     }
                 }
@@ -257,7 +254,7 @@ impl StockDataProvider {
     
     // 同步下载文件
     fn download_file_sync(url: &str, arrow_file: &str) -> Result<()> {
-        println!("Downloading stock data from: {}", url);
+        info!("Downloading stock data from: {}", url);
         
         // 下载文件
         let client = reqwest::blocking::Client::new();
@@ -272,7 +269,7 @@ impl StockDataProvider {
         
         std::fs::write(&arrow_file, &bytes)?;
         
-        println!("Successfully downloaded stock data file");
+        info!("Successfully downloaded stock data file");
         Ok(())
     }
 }

@@ -189,7 +189,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // 读取数据
         let stocks = arrow_utils::read_stock_data_from_arrow("docs/data/stock.arrow")?;
         
-        println!("Found {} stocks in database", stocks.len());
+        info!("Found {} stocks in database", stocks.len());
         
         // 过滤数据
         let filtered_stocks: Vec<&StockData> = stocks.iter()
@@ -210,7 +210,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             })
             .collect();
         
-        println!("Filtered to {} stocks", filtered_stocks.len());
+        info!("Filtered to {} stocks", filtered_stocks.len());
         
         // 显示结果
         for (i, stock) in filtered_stocks.iter().enumerate() {
@@ -218,11 +218,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 break;
             }
             
-            println!("Stock: {} ({}) - {}", stock.name, stock.symbol, stock.exchange);
-            println!("{:-<60}", "");
-            println!("{:<10} {:<10} {:<10} {:<10} {:<10} {:<15} {:<15}", 
+            info!("Stock: {} ({}) - {}", stock.name, stock.symbol, stock.exchange);
+            info!("{:-<60}", "");
+            info!("{:<10} {:<10} {:<10} {:<10} {:<10} {:<15} {:<15}", 
                      "Date", "Open", "High", "Low", "Close", "Volume", "Amount");
-            println!("{:-<60}", "");
+            info!("{:-<60}", "");
             
             for daily in stock.daily.iter().take(limit) {
                 // Format date as YYYY-MM-DD
@@ -232,19 +232,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 let day = &date_str[6..8];
                 let formatted_date = format!("{}-{}-{}", year, month, day);
                 
-                println!("{:<10} {:<10.2} {:<10.2} {:<10.2} {:<10.2} {:<15} {:<15}", 
+                info!("{:<10} {:<10.2} {:<10.2} {:<10.2} {:<10.2} {:<15} {:<15}", 
                          formatted_date, daily.open, daily.high, daily.low, daily.close, 
                          daily.volume, daily.amount);
             }
             
             if stock.daily.len() > limit {
-                println!("... and {} more records", stock.daily.len() - limit);
+                info!("... and {} more records", stock.daily.len() - limit);
             } else if stock.daily.is_empty() {
-                println!("No daily data available for this stock");
+                info!("No daily data available for this stock");
             }
         }
     } else {
-        println!("No command specified. Use --help for usage information.");
+        info!("No command specified. Use --help for usage information.");
     }
     
     Ok(())
