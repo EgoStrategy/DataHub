@@ -46,8 +46,26 @@ impl StockDataProvider {
         
         // 同步检查更新
         if let Err(_) = Self::check_for_updates_sync(package_arrow_file, "https://egostrategy.github.io/DataHub/data/stock.arrow") {
-            if let Err(e) = Self::check_for_updates_sync(package_arrow_file, "https://bgithub.xyz/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow") {
-                eprintln!("Failed to check for updates: {}", e);
+            // 尝试多个国内镜像站点，按优先级排序
+            let mirror_sites = [
+                "https://bgithub.xyz/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow",
+                "https://kkgithub.com/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow",
+                "https://gitclone.com/github.com/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow",
+                "https://github.ur1.fun/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow",
+                "https://hub.fastgit.org/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow",
+                "https://github.com.cnpmjs.org/EgoStrategy/DataHub/raw/refs/heads/main/docs/data/stock.arrow"
+            ];
+            
+            let mut success = false;
+            for mirror in mirror_sites {
+                if let Ok(_) = Self::check_for_updates_sync(package_arrow_file, mirror) {
+                    success = true;
+                    break;
+                }
+            }
+            
+            if !success {
+                eprintln!("Failed to check for updates from all mirror sites");
             }
         }
         

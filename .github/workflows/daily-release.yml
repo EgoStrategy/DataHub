@@ -3,7 +3,7 @@ name: Daily Release
 on:
   schedule:
     # 每天中国时间16:00 (UTC+8) 运行，对应UTC时间08:00
-    - cron: '0 8 * * *'
+    - cron: '0 10 * * *'
   workflow_dispatch:  # 允许手动触发
 
 env:
