@@ -344,7 +344,7 @@
             });
         }
         
-        // 加载数据 - 真正的分块加载优化版本
+        // 加载数据 - 并发分块加载优化版本
         async function loadData() {
             try {
                 console.time('Loading data');
@@ -360,32 +360,30 @@
                     throw new Error('无法获取文件大小');
                 }
                 
-                // 分块大小 (2MB)
-                const chunkSize = 2 * 1024 * 1024;
+                // 分块大小 (1MB)
+                const chunkSize = 1 * 1024 * 1024;
                 const chunks = Math.ceil(fileSize / chunkSize);
+                
+                // 最大并发下载数
+                const maxConcurrent = 8;
                 
                 updateLoadingProgress(10, `准备下载数据文件 (总大小: ${formatFileSize(fileSize)})...`);
                 
                 // 使用流式处理和增量解析
                 let downloadedSize = 0;
-                let arrowData = null;
+                let completedChunks = 0;
                 
                 // 创建一个临时存储，用于存储已下载的块
-                const tempChunks = [];
+                const tempChunks = new Array(chunks);
                 
-                // 逐块下载
-                for (let i = 0; i < chunks; i++) {
-                    const start = i * chunkSize;
+                // 初始显示下载进度为0
+                updateDownloadDetails(`已下载 0 KB / ${formatFileSize(fileSize)} (0%)`);
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // 下载单个分片的函数
+                const downloadChunk = async (index) => {
+                    const start = index * chunkSize;
                     const end = Math.min(fileSize - 1, start + chunkSize - 1);
-                    
-                    updateLoadingProgress(
-                        10 + Math.floor((i / chunks) * 70),
-                        `下载数据分片 ${i + 1}/${chunks}`
-                    );
-                    
-                    updateDownloadDetails(
-                        `已下载 ${formatFileSize(downloadedSize)} / ${formatFileSize(fileSize)} (${Math.floor((downloadedSize / fileSize) * 100)}%)`
-                    );
                     
                     try {
                         const response = await fetch('./data/stock.arrow', {
@@ -395,46 +393,101 @@
                         });
                         
                         if (!response.ok && response.status !== 206) {
-                            throw new Error(`下载分片 ${i + 1} 失败: ${response.status} ${response.statusText}`);
+                            throw new Error(`下载分片 ${index + 1} 失败: ${response.status} ${response.statusText}`);
                         }
                         
                         const buffer = await response.arrayBuffer();
-                        tempChunks.push(new Uint8Array(buffer));
-                        downloadedSize += buffer.byteLength;
+                        const chunk = new Uint8Array(buffer);
+                        
+                        // 存储分片到对应位置
+                        tempChunks[index] = chunk;
                         
                         // 更新下载进度
-                        updateDownloadDetails(
-                            `已下载 ${formatFileSize(downloadedSize)} / ${formatFileSize(fileSize)} (${Math.floor((downloadedSize / fileSize) * 100)}%)`
+                        downloadedSize += buffer.byteLength;
+                        completedChunks++;
+                        
+                        // 计算实际进度百分比
+                        const percent = Math.floor((completedChunks / chunks) * 100);
+                        // 计算显示的下载大小 - 根据完成的分片数计算
+                        const displaySize = Math.floor((fileSize * completedChunks) / chunks);
+                        
+                        updateLoadingProgress(
+                            10 + Math.floor((completedChunks / chunks) * 70),
+                            `下载数据分片 ${completedChunks}/${chunks}`
                         );
                         
-                        // 给UI一点时间更新
-                        await new Promise(resolve => setTimeout(resolve, 10));
+                        updateDownloadDetails(
+                            `已下载 ${formatFileSize(displaySize)} / ${formatFileSize(fileSize)} (${percent}%)`
+                        );
+                        
+                        return index;
                     } catch (error) {
-                        console.error(`下载分片 ${i + 1} 失败:`, error);
-                        throw new Error(`下载分片 ${i + 1} 失败: ${error.message}`);
+                        console.error(`下载分片 ${index + 1} 失败:`, error);
+                        throw new Error(`下载分片 ${index + 1} 失败: ${error.message}`);
                     }
+                };
+                
+                // 并发下载所有分片
+                try {
+                    // 创建分片下载任务队列
+                    const tasks = [];
+                    for (let i = 0; i < chunks; i++) {
+                        tasks.push(i);
+                    }
+                    
+                    // 并发执行下载任务，但一次只下载一个分片
+                    const results = [];
+                    
+                    while (tasks.length > 0) {
+                        // 取出最多maxConcurrent个任务并行执行
+                        const batch = tasks.splice(0, Math.min(maxConcurrent, tasks.length));
+                        const batchPromises = batch.map(index => downloadChunk(index));
+                        
+                        // 等待当前批次完成
+                        const batchResults = await Promise.all(batchPromises);
+                        results.push(...batchResults);
+                        
+                        // 给UI一点时间更新
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    // 所有分片下载完成后，显示一个明确的状态更新
+                    console.log(`所有分片下载完成，共 ${completedChunks}/${chunks} 个分片`);
+                    
+                    // 所有分片下载完成后，显示一个明确的状态更新
+                    updateLoadingProgress(80, '所有分片下载完成，正在合并数据...');
+                    updateDownloadDetails(`已下载 ${formatFileSize(fileSize)} / ${formatFileSize(fileSize)} (100%)`);
+                    // 给用户一点时间看到这个状态更新
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                } catch (error) {
+                    console.error('下载分片失败:', error);
+                    throw new Error(`下载分片失败: ${error.message}`);
                 }
                 
-                updateLoadingProgress(80, '正在合并数据...');
-                
                 // 计算总大小
-                const totalLength = tempChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+                const totalLength = tempChunks.reduce((acc, chunk) => acc + (chunk ? chunk.length : 0), 0);
                 
                 // 合并所有块
                 try {
+                    updateLoadingProgress(85, '正在合并数据块...');
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
                     // 使用更高效的方法合并块
                     let offset = 0;
                     const mergedArray = new Uint8Array(totalLength);
                     
                     for (const chunk of tempChunks) {
-                        mergedArray.set(chunk, offset);
-                        offset += chunk.length;
+                        if (chunk) {  // 确保分片存在
+                            mergedArray.set(chunk, offset);
+                            offset += chunk.length;
+                        }
                     }
                     
                     // 清除临时存储，释放内存
                     tempChunks.length = 0;
                     
-                    updateLoadingProgress(85, '正在解析数据...');
+                    updateLoadingProgress(90, '正在解析数据...');
+                    await new Promise(resolve => setTimeout(resolve, 300));
                     
                     // 解析二进制数据
                     stockData = parseArrowData(mergedArray);
@@ -451,7 +504,8 @@
                 console.log('Data loaded successfully');
                 
                 // 处理数据
-                updateLoadingProgress(90, '正在处理数据...');
+                updateLoadingProgress(92, '正在处理数据...');
+                await new Promise(resolve => setTimeout(resolve, 300));
                 processStockData();
                 
                 // 更新股票数量
@@ -459,13 +513,14 @@
                 
                 // 初始化UI
                 updateLoadingProgress(95, '正在初始化界面...');
+                await new Promise(resolve => setTimeout(resolve, 300));
                 initUI();
                 
                 // 隐藏加载指示器
                 updateLoadingProgress(100, '加载完成');
                 setTimeout(() => {
                     document.getElementById('loading').style.display = 'none';
-                }, 500);
+                }, 800);
             } catch (error) {
                 console.error('Error loading data:', error);
                 document.getElementById('stock-count').textContent = '加载失败';
