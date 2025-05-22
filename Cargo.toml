@@ -1,6 +1,6 @@
 [package]
 name = "egostrategy_datahub"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 description = "股票市场数据处理系统，支持多交易所数据抓取和分析"
 license = "MIT"
@@ -20,15 +20,15 @@ reqwest = { version = "0.11.24", features = ["json", "blocking"] }
 serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.113"
 chrono = "0.4.34"
-chrono-tz = "0.8.5"
-clap = "3.2.25"
+chrono-tz = "0.10.3"
+clap = { version = "4.5.38", features = ["string"] }
 anyhow = "1.0.79"
-thiserror = "1.0.56"
+thiserror = "2.0.12"
 log = "0.4.20"
 env_logger = "0.11.1"
 async-trait = "0.1.77"
 httpdate = "1.0.3"
-calamine = "0.23.1"
+calamine = "0.26.1"
 tokio = { version = "1.36.0", features = ["full"] }
 
 [build-dependencies]

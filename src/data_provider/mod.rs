@@ -1,3 +1,5 @@
+use chrono::prelude::*;
+use chrono::{Local};
 use log::{error, info};
 
 use crate::models::stock::StockData;
@@ -42,30 +44,33 @@ impl StockDataProvider {
         let latest_date_before = Self::get_latest_date_from_data(&data_before_update);
         if let Some(date) = latest_date_before {
             info!("更新前最新交易日期: {}", date);
-        } else {
-            info!("更新前无交易数据");
-        }
-        
-        // 同步检查更新
-        // 尝试多个国内镜像站点，按优先级排序
-        let mirror_sites = [
-            "raw.githubusercontent.com",
-            "raw.bgithub.xyz",
-            "raw.staticdn.net"
-        ];
-        
-        let mut success = false;
-        for mirror in mirror_sites {
-            if let Ok(_) = Self::check_for_updates_sync(package_arrow_file, &format!("https://{}/EgoStrategy/DataHub/main/docs/data/stock.arrow", mirror)) {
-                success = true;
-                break;
+            let tz_offset: FixedOffset = "+08:00".parse()?;
+            let dt_now = Local::now().with_timezone(&tz_offset);
+            let now_int = dt_now.format("%Y%m%d").to_string().parse::<i32>()?;
+            
+            if date < now_int {
+                // 同步检查更新
+                // 尝试多个国内镜像站点，按优先级排序
+                let mirror_sites = [
+                    "raw.githubusercontent.com",
+                    "raw.bgithub.xyz",
+                    "raw.staticdn.net"
+                ];
+                
+                let mut success = false;
+                for mirror in mirror_sites {
+                    if let Ok(_) = Self::check_for_updates_sync(package_arrow_file, &format!("https://{}/EgoStrategy/DataHub/main/docs/data/stock.arrow", mirror)) {
+                        success = true;
+                        break;
+                    }
+                }
+                
+                if !success {
+                    error!("Failed to check for updates from all mirror sites");
+                }
             }
         }
-        
-        if !success {
-            error!("Failed to check for updates from all mirror sites");
-        }
-        
+            
         // 从文件加载数据（更新后）
         let data = arrow_utils::read_stock_data_from_arrow(&package_arrow_file)?;
         let latest_date_after = Self::get_latest_date_from_data(&data);

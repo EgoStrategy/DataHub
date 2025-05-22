@@ -6,8 +6,8 @@ use egostrategy_datahub::services::data_service::DataService;
 use egostrategy_datahub::util::arrow_utils;
 use egostrategy_datahub::config::Config;
 
-use clap::{App, Arg, SubCommand};
-use chrono::NaiveDate;
+use clap::{value_parser, Arg, Command};
+use chrono::{Local, NaiveDate};
 use log::{info, error};
 use std::error::Error;
 use std::sync::Arc;
@@ -17,10 +17,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize logger
     env_logger::init();
     
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    
     // 创建基本的命令行应用
-    let app = App::new("DataHub")
+    let app = Command::new("DataHub")
         .version("1.0.0")
         .author("DataHub Team")
         .about("Stock market data processing system");
@@ -28,90 +26,89 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // 在开发模式下添加调试参数
     #[cfg(debug_assertions)]
     let app = app.arg(
-        Arg::with_name("debug")
+        Arg::new("debug")
             .long("debug")
             .help("Enable debug mode")
-            .takes_value(false),
+            .value_parser(value_parser!(bool)),
     )
     .arg(
-        Arg::with_name("debug-limit")
+        Arg::new("debug-limit")
             .long("debug-limit")
             .help("Limit the number of stocks to process in debug mode")
-            .takes_value(true)
+            .value_parser(value_parser!(usize))
             .default_value("2"),
     );
 
     // 添加子命令
     let app = app.subcommand(
-        SubCommand::with_name("scrape")
+        Command::new("scrape")
             .about("Scrape stock data from various exchanges")
             .arg(
-                Arg::with_name("exchange")
+                Arg::new("exchange")
                     .short('e')
                     .long("exchange")
                     .value_name("EXCHANGE")
                     .help("Exchange to scrape data from (sse, szse, all)")
                     .required(true)
-                    .takes_value(true),
+                    .value_parser(value_parser!(String)),
             )
             .arg(
-                Arg::with_name("date")
+                Arg::new("date")
                     .short('d')
                     .long("date")
                     .value_name("DATE")
                     .help("Date to scrape data for (YYYY-MM-DD)")
-                    .takes_value(true)
-                    .default_value(&today),
+                    .value_parser(value_parser!(String))
+                    .default_value(Local::now().format("%Y-%m-%d").to_string()),
             )
             .arg(
-                Arg::with_name("symbol")
+                Arg::new("symbol")
                     .short('s')
                     .long("symbol")
                     .value_name("SYMBOL")
                     .help("Stock symbol to scrape history for (optional)")
-                    .takes_value(true),
+                    .value_parser(value_parser!(String)),
             )
             .arg(
-                Arg::with_name("max-records")
+                Arg::new("max-records")
                     .long("max-records")
                     .value_name("MAX_RECORDS")
                     .help("Maximum number of kline records to keep per stock")
-                    .takes_value(true)
+                    .value_parser(value_parser!(usize))
                     .default_value("200"),
             )
             .arg(
-                Arg::with_name("force-full")
+                Arg::new("force-full")
                     .short('f')
                     .long("force-full")
-                    .help("Force fetching full history data even if incremental data exists")
-                    .takes_value(false),
+                    .help("Force fetching full history data even if incremental data exists"),
             ),
     ).subcommand(
-        SubCommand::with_name("explore")
+        Command::new("explore")
             .about("Explore stock data")
             .arg(
-                Arg::with_name("symbol")
+                Arg::new("symbol")
                     .short('s')
                     .long("symbol")
                     .value_name("SYMBOL")
-                    .help("Stock symbol to explore")
-                    .takes_value(true),
+                    .value_parser(value_parser!(String))
+                    .help("Stock symbol to explore"),
             )
             .arg(
-                Arg::with_name("exchange")
+                Arg::new("exchange")
                     .short('e')
                     .long("exchange")
                     .value_name("EXCHANGE")
-                    .help("Exchange to filter by (sse, szse)")
-                    .takes_value(true),
+                    .value_parser(value_parser!(String))
+                    .help("Exchange to filter by (sse, szse)"),
             )
             .arg(
-                Arg::with_name("limit")
+                Arg::new("limit")
                     .short('l')
                     .long("limit")
                     .value_name("LIMIT")
                     .help("Limit the number of records to display")
-                    .takes_value(true)
+                    .value_parser(value_parser!(usize))
                     .default_value("10"),
             )
     );
@@ -120,30 +117,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // 获取调试模式设置
     #[cfg(debug_assertions)]
-    let debug_mode = matches.is_present("debug");
+    let debug_mode = matches.get_flag("debug");
     #[cfg(not(debug_assertions))]
     let debug_mode = false;
 
     #[cfg(debug_assertions)]
-    let debug_stock_limit = matches.value_of("debug-limit")
-        .unwrap_or("2")
-        .parse::<usize>()
-        .unwrap_or(2);
+    let debug_stock_limit = matches.get_one::<usize>("debug-limit").unwrap().clone();
     #[cfg(not(debug_assertions))]
     let debug_stock_limit = usize::MAX;
 
     if let Some(matches) = matches.subcommand_matches("scrape") {
-        let exchange = matches.value_of("exchange").unwrap();
-        let date_str = matches.value_of("date").unwrap();
+        let exchange = matches.get_one::<String>("exchange").unwrap();
+        let date_str = matches.get_one::<String>("date").unwrap();
         let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?;
-        let symbol = matches.value_of("symbol");
-        let force_full = matches.is_present("force-full");
+        let symbol = matches.get_one::<String>("symbol");
+        let force_full = matches.get_flag("force-full");
         
         // 获取最大K线记录数量
-        let max_kline_records = matches.value_of("max-records")
-            .unwrap_or("200")
-            .parse::<usize>()
-            .unwrap_or(200);
+        let max_kline_records = matches.get_one::<usize>("max-records").unwrap().clone();
         
         // Create scrapers
         let scrapers: Vec<Arc<dyn StockScraper + Send + Sync>> = match exchange.to_lowercase().as_str() {
@@ -179,12 +170,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             data_service.process_daily_stocks(&date).await?;
         }
     } else if let Some(matches) = matches.subcommand_matches("explore") {
-        let symbol_filter = matches.value_of("symbol");
-        let exchange_filter = matches.value_of("exchange");
-        let limit = matches.value_of("limit")
-            .unwrap_or("10")
-            .parse::<usize>()
-            .unwrap_or(10);
+        let symbol_filter = matches.get_one::<String>("symbol");
+        let exchange_filter = matches.get_one::<String>("exchange");
+        let limit = matches.get_one::<usize>("limit").unwrap().clone();
         
         // 读取数据
         let stocks = arrow_utils::read_stock_data_from_arrow("docs/data/stock.arrow")?;

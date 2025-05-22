@@ -47,22 +47,6 @@ impl SZSEScraper {
         *last = Some(now);
     }
     
-    // 安全地解析Excel单元格数值
-    fn parse_excel_value<T>(&self, cell: &DataType, column_name: &str) -> Result<T> 
-    where 
-        T: std::str::FromStr,
-        <T as std::str::FromStr>::Err: std::fmt::Display,
-    {
-        match cell {
-            DataType::Float(f) => Ok((*f as f64).to_string().parse::<T>()
-                .map_err(|e| DataHubError::DataError(format!("Failed to parse {} value: {}", column_name, e)))?),
-            DataType::Int(i) => Ok((*i as i64).to_string().parse::<T>()
-                .map_err(|e| DataHubError::DataError(format!("Failed to parse {} value: {}", column_name, e)))?),
-            DataType::String(s) => s.replace(",", "").parse::<T>()
-                .map_err(|e| DataHubError::DataError(format!("Failed to parse {} value: {}", column_name, e))),
-            _ => Err(DataHubError::DataError(format!("Invalid {} data format", column_name))),
-        }
-    }
 }
 
 #[async_trait]
@@ -115,28 +99,28 @@ impl StockScraper for SZSEScraper {
                 
                 // 使用安全的解析方法
                 let open = match row.get(4) {
-                    Some(cell) => self.parse_excel_value::<f32>(cell, "open").unwrap_or_default(), // 改为f32
+                    Some(cell) => cell.as_f64().unwrap() as f32,
                     None => 0.0,
                 };
                 
                 let high = match row.get(5) {
-                    Some(cell) => self.parse_excel_value::<f32>(cell, "high").unwrap_or_default(), // 改为f32
+                    Some(cell) => cell.as_f64().unwrap() as f32,
                     None => 0.0,
                 };
                 
                 let low = match row.get(6) {
-                    Some(cell) => self.parse_excel_value::<f32>(cell, "low").unwrap_or_default(), // 改为f32
+                    Some(cell) => cell.as_f64().unwrap() as f32,
                     None => 0.0,
                 };
                 
                 let close = match row.get(7) {
-                    Some(cell) => self.parse_excel_value::<f32>(cell, "close").unwrap_or_default(), // 改为f32
+                    Some(cell) => cell.as_f64().unwrap() as f32,
                     None => 0.0,
                 };
                 
                 let volume = match row.get(9) {
                     Some(cell) => {
-                        let vol = self.parse_excel_value::<f64>(cell, "volume").unwrap_or_default();
+                        let vol = cell.as_f64().unwrap();
                         (vol * 10000.0).round() as i64
                     },
                     None => 0,
@@ -144,7 +128,7 @@ impl StockScraper for SZSEScraper {
                 
                 let amount = match row.get(10) {
                     Some(cell) => {
-                        let amt = self.parse_excel_value::<f64>(cell, "amount").unwrap_or_default();
+                        let amt = cell.as_f64().unwrap();
                         (amt * 10000.0).round() as i64
                     },
                     None => 0,
