@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Arg::new("debug")
             .long("debug")
             .help("Enable debug mode")
-            .value_parser(value_parser!(bool)),
+            .action(clap::ArgAction::SetTrue),
     )
     .arg(
         Arg::new("debug-limit")
@@ -81,7 +81,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Arg::new("force-full")
                     .short('f')
                     .long("force-full")
-                    .help("Force fetching full history data even if incremental data exists"),
+                    .help("Force fetching full history data even if incremental data exists")
+                    .action(clap::ArgAction::SetTrue),
             ),
     ).subcommand(
         Command::new("explore")

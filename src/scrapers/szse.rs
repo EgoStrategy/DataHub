@@ -120,16 +120,14 @@ impl StockScraper for SZSEScraper {
                 
                 let volume = match row.get(9) {
                     Some(cell) => {
-                        let vol = cell.as_f64().unwrap();
-                        (vol * 10000.0).round() as i64
+                        (cell.as_string().unwrap().replace(",", "").parse::<f64>().unwrap() * 10000.0).round() as i64
                     },
                     None => 0,
                 };
                 
                 let amount = match row.get(10) {
                     Some(cell) => {
-                        let amt = cell.as_f64().unwrap();
-                        (amt * 10000.0).round() as i64
+                        (cell.as_string().unwrap().replace(",", "").parse::<f64>().unwrap() * 10000.0).round() as i64
                     },
                     None => 0,
                 };
