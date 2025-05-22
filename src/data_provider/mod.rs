@@ -42,32 +42,29 @@ impl StockDataProvider {
         // 从文件加载数据（更新前）
         let data_before_update = arrow_utils::read_stock_data_from_arrow(&package_arrow_file)?;
         let latest_date_before = Self::get_latest_date_from_data(&data_before_update);
-        if let Some(date) = latest_date_before {
-            info!("更新前最新交易日期: {}", date);
-            let tz_offset: FixedOffset = "+08:00".parse()?;
-            let dt_now = Local::now().with_timezone(&tz_offset);
-            let now_int = dt_now.format("%Y%m%d").to_string().parse::<i32>()?;
+        let tz_offset: FixedOffset = "+08:00".parse()?;
+        let dt_now = Local::now().with_timezone(&tz_offset);
+        let now_int = dt_now.format("%Y%m%d").to_string().parse::<i32>()?;
+        if latest_date_before.is_none() || latest_date_before.unwrap() < now_int {
+            info!("更新前最新交易日期: {}", latest_date_before.unwrap_or(-1));
+            // 同步检查更新
+            // 尝试多个国内镜像站点，按优先级排序
+            let mirror_sites = [
+                "raw.githubusercontent.com",
+                "raw.bgithub.xyz",
+                "raw.staticdn.net"
+            ];
             
-            if date < now_int {
-                // 同步检查更新
-                // 尝试多个国内镜像站点，按优先级排序
-                let mirror_sites = [
-                    "raw.githubusercontent.com",
-                    "raw.bgithub.xyz",
-                    "raw.staticdn.net"
-                ];
-                
-                let mut success = false;
-                for mirror in mirror_sites {
-                    if let Ok(_) = Self::check_for_updates_sync(package_arrow_file, &format!("https://{}/EgoStrategy/DataHub/main/docs/data/stock.arrow", mirror)) {
-                        success = true;
-                        break;
-                    }
+            let mut success = false;
+            for mirror in mirror_sites {
+                if let Ok(_) = Self::check_for_updates_sync(package_arrow_file, &format!("https://{}/EgoStrategy/DataHub/main/docs/data/stock.arrow", mirror)) {
+                    success = true;
+                    break;
                 }
-                
-                if !success {
-                    error!("Failed to check for updates from all mirror sites");
-                }
+            }
+            
+            if !success {
+                error!("Failed to check for updates from all mirror sites");
             }
         }
             
